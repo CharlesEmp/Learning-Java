@@ -1,0 +1,7 @@
+LinkedList 查询效率相对于ArrayList较慢
+    因为ArrayList可以根据索引直接取出元素
+        而LinkedList需要根据 顺链 或者 倒链 查找
+
+LinkedList 添加（删除）元素的效率相对于ArrayList较高
+    因为ArrayList每次添加（删除）动作，可能需要移动大量元素
+        而LinkedList只需要改变元素记录的地址值就可以
