@@ -1,4 +1,4 @@
-JDK 7及之前的版本
+JDK 7及之前的版本：
     HashSet第一次存储abc过程
         1.首先底层会创建一个长度为16的数组，该数组作为哈希表
         2.根据当前元素（abc）的哈希值（利用元素的hashcode的方法）
@@ -16,4 +16,89 @@ JDK 7及之前的版本
         2.此时会判断3索引位置是否为null（判断该位置是否存储元素），不为null，发现此位置已存储abc元素
           会将即将存储的abc与集合中已有的abc的哈希值进行比较
           abc和abc的哈希值相同，此时再利用equals方法比较，结果也相同
-          底层会认为即将存储的abc 与集合中的abc是相同元素，不在存入hashset
+          底层会认为即将存储的abc 与集合中的abc是相同元素，不再存入hashset
+
+    HashSet第四次存储ghi过程
+         1.根据当前元素（ghi）的哈希值（利用元素的hashcode的方法）
+           底层会 根据哈希值 再结合 某种算法计算出 存储到数组中的索引（假设依然为3）
+         2.此时会判断3索引位置是否为null（判断该位置是否存储元素），不为null，发现此位置已存储abc元素
+           会将即将存储的ghi与集合中已有的abc的哈希值进行比较
+           假设ghi和abc的哈希值不同，此时不再利用equals方法比较，底层认为两者是不同元素
+             将ghi以链表的形式存入HashSet
+
+    HashSet第五次存储mvp过程
+        1.根据当前元素（mvp）的哈希值（利用元素的hashcode的方法）
+          底层会 根据哈希值 再结合 某种算法计算出 存储到数组中的索引（假设依然为3）
+        2.此时会判断3索引位置是否为null（判断该位置是否存储元素），不为null，发现此位置已存储abc元素
+          由于3位置已经有元素，并且形成了链表结构，那么mvp会与列表上的元素逐个比较
+            a.如果mvp与链表上的abc比较发现哈希值不同
+              此时再去比较链表上的ghi比仍不相同 ==> 底层认为mvp与两者是不同元素 ==> 存入
+            b.如果mvp与链表上的abc比较发现哈希值相同，再去利用equals比较不相同
+              此时再去与链表上的ghi比较发现哈希值相同，再去利用equals比较不相同 ==> 底层认为mvp与两者是不同元素 ==> 存入
+            c.如果mvp与链表上的abc比较发现哈希值相同，再去利用equals比较也相同 ==> 底层认为mvp与abc是相同元素，不在比较其他元素 ==> 不存入
+          假设满足b情况，将mvp以链表的形式存入HashSet
+
+    总结：将新添加的元素与集合中已有元素进行比较
+          a.如果新添加的元素与集合中已有元素的哈希值均不相同 ==> 存入
+          b.如果新添加的元素与集合中已有元素的哈希值相同
+            此时再去比较equals ==> 比较结果相同，说明该元素重复 ==> 不存入
+                              ==> 比较结果不同 ==>存入
+
+JDK 8及之后的版本：（底层存储原理与JDK7及之前的版本相同，但是底层做了一些优化）
+    优化点：
+      1.如果链表上元素个数 >= 8 的时候，将链表转换成另一种 树形结构（红黑树）
+        为了提高查找效率（减少比较次数）
+      2.如果链表上元素个数 < 8 的时候，依然保持链表结构
+
+
+
+
+//向hashset中添加元素
+//hash：根据元素计算哈希值得到
+//key： 存储的元素
+//Node[] tab：底层使用的哈希表
+final V putVal(int hash, K key, V value, boolean onlyIfAbsent,boolean evict)
+{
+    Node<K,V>[] tab; Node<K,V> p; int n, i;
+//1.如果底层的哈希表为null，或者哈希表长度为0，此时会造表（初始化容量为16的哈希表）
+    if ((tab = table) == null || (n = tab.length) == 0)
+        n = (tab = resize()).length;
+
+//2.存取的元素利用哈希值计算出在哈希表中的存储位置，取出该位置的元素，如果执行if判断为真 说明该位置没有元素 直接将当前元素存入该位置
+    if ((p = tab[i = (n - 1) & hash]) == null)
+        tab[i] = newNode(hash, key, value, null);
+
+//3.如果走else，说明当前计算出的表中的索引位置有元素
+    else {
+        Node<K,V> e; K k;
+
+//  3.1 如果存取的元素与该位置的第一个元素哈希值相同，equals方法也相同 ==> 不存
+        if (p.hash == hash && ((k = p.key) == key || (key != null && key.equals(k))))
+            e = p;
+
+//  3.2.1 存取元素的哈希值与该位置的第一个元素比较，发现哈希值不同 或者 哈希值相同equals不同
+//      p instanceof TreeNode 为真 代表该链表已经被树化（已经形成树结构），那么此时会把元素加入树中
+        else if (p instanceof TreeNode)
+            e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
+
+//  3.2.2 如果走这个else说明没有树化，链表没有形成树结构
+//        即将存储的元素 与 该位置的第一个元素已经比较过（哈希值不同 或 哈希值相同equals不同）与第一个元素不是相同元素
+//        for循环含义：把即将存储的元素与链表上剩余的元素逐一比较
+//        比较过程中一旦出现哈希值相同 且 equals也相同    ==> 不存
+//        与链上所有元素比较 哈希值均不相同               ==> 存
+//        与链上所有元素比较 哈希值相同 但 equals均不相同 ==> 存
+        else {
+            for (int binCount = 0; ; ++binCount) {
+                if ((e = p.next) == null) {
+                    p.next = newNode(hash, key, value, null);
+                    if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
+                        treeifyBin(tab, hash);
+                    break;
+                }
+                if (e.hash == hash &&
+                    ((k = e.key) == key || (key != null && key.equals(k))))
+                    break;
+                p = e;
+            }
+        }
+}
